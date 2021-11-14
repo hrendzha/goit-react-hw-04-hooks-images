@@ -1,4 +1,4 @@
-import { Component } from 'react';
+import { useState, useEffect } from 'react';
 import Loader from 'react-loader-spinner';
 import Searchbar from './components/Searchbar';
 import ImageGallery from './components/ImageGallery';
@@ -7,96 +7,73 @@ import Modal from './components/Modal';
 import { imagesApi } from './services/imagesApi';
 import scrollToNewImages from './js/scrollToNewImages';
 
-class App extends Component {
-    state = {
-        photos: [],
-        isLoaderVisible: false,
-        isModalOpen: false,
-        largeImageUrl: '',
-        query: '',
-        page: 1,
+function App() {
+    const [photos, setPhotos] = useState([]);
+    const [isLoaderVisible, setIsLoaderVisible] = useState(false);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [largeImageUrl, setLargeImageUrl] = useState('');
+    const [query, setQuery] = useState('');
+    const [page, setPage] = useState(1);
+
+    useEffect(() => {
+        if (!query) return;
+        toggleLoader();
+
+        imagesApi
+            .fetchWithQuery(query, page)
+            .then(photos => {
+                if (page > 1) {
+                    setPhotos(prevPhotos => [...prevPhotos, ...photos]);
+                    scrollToNewImages();
+                    return;
+                }
+                setPhotos([...photos]);
+            })
+            .catch(error => console.log(error))
+            .finally(() => toggleLoader());
+    }, [page, query]);
+
+    const toggleLoader = () => setIsLoaderVisible(bool => !bool);
+
+    const handleFormSubmit = query => {
+        setQuery(query);
+        setPage(1);
     };
 
-    componentDidUpdate(prevProps, prevState) {
-        const { query: currentQuery, page: currentPage } = this.state;
-        const { query: prevQuery, page: prevPage } = prevState;
+    const handleLoadMoreBtnClick = () => setPage(page => page + 1);
 
-        if (currentQuery !== prevQuery) {
-            this.toggleLoader();
+    const handleModalOpen = largeImageUrl => {
+        setIsModalOpen(true);
+        setLargeImageUrl(largeImageUrl);
+    };
 
-            imagesApi
-                .fetchWithQuery(currentQuery, currentPage)
-                .then(photos => this.setState({ photos }))
-                .catch(error => console.log(error))
-                .finally(() => this.toggleLoader());
-        }
+    const handleModalClose = () => setIsModalOpen(false);
 
-        if (currentPage !== prevPage && currentPage !== 1) {
-            this.toggleLoader();
+    return (
+        <>
+            <Searchbar onSubmit={handleFormSubmit} />
 
-            imagesApi
-                .fetchWithQuery(currentQuery, currentPage)
-                .then(photos => {
-                    this.setState(prevState => ({
-                        photos: [...prevState.photos, ...photos],
-                    }));
+            <ImageGallery photos={photos} onModalOpen={handleModalOpen} />
 
-                    scrollToNewImages();
-                })
-                .catch(error => console.log(error))
-                .finally(() => this.toggleLoader());
-        }
-    }
-
-    toggleLoader = () =>
-        this.setState(prevState => ({
-            isLoaderVisible: !prevState.isLoaderVisible,
-        }));
-
-    handleFormSubmit = query => this.setState({ query, page: 1 });
-
-    handleLoadMoreBtnClick = () =>
-        this.setState(prevState => ({ page: prevState.page + 1 }));
-
-    handleModalOpen = largeImageUrl =>
-        this.setState({
-            isModalOpen: true,
-            largeImageUrl,
-        });
-
-    handleModalClose = () => this.setState({ isModalOpen: false });
-
-    render() {
-        const { photos, isLoaderVisible, isModalOpen, largeImageUrl } =
-            this.state;
-
-        return (
-            <>
-                <Searchbar onSubmit={this.handleFormSubmit} />
-                <ImageGallery
-                    photos={photos}
-                    onModalOpen={this.handleModalOpen}
+            {Boolean(photos.length) && !isLoaderVisible && (
+                <Button onClick={handleLoadMoreBtnClick} />
+            )}
+            <Loader
+                className="loader"
+                visible={isLoaderVisible}
+                type="ThreeDots"
+                color="#00BFFF"
+                height={80}
+                width={80}
+            />
+            {isModalOpen && (
+                <Modal
+                    largeImageUrl={largeImageUrl}
+                    onModalClose={handleModalClose}
                 />
-                {Boolean(photos.length) && !isLoaderVisible && (
-                    <Button onClick={this.handleLoadMoreBtnClick} />
-                )}
-                <Loader
-                    className="loader"
-                    visible={isLoaderVisible}
-                    type="ThreeDots"
-                    color="#00BFFF"
-                    height={80}
-                    width={80}
-                />
-                {isModalOpen && (
-                    <Modal
-                        largeImageUrl={largeImageUrl}
-                        onModalClose={this.handleModalClose}
-                    />
-                )}
-            </>
-        );
-    }
+            )}
+        </>
+    );
 }
 
 export default App;
